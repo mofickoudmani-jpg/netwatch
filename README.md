@@ -114,7 +114,7 @@ netwatch/
 
 ## About the Developer
 
-**Mofic Koudmani** | mofic123@hotmail.com | (954) 249-5068  
+**Mofic Koudmani** | mofickoudmani@gmail.com | (954) 249-5068  
 B.A.S. Cybersecurity & Ethical Hacking — Broward College (Expected Aug 2026)  
 Microsoft AZ-900 Certified | CompTIA Security+ (In Progress)  
 Tools: Kali Linux, Wireshark, Metasploit, Nessus  
