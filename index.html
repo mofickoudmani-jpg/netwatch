@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetWatch — Network Traffic Analyzer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;700&family=Exo+2:wght@300;400;600&display=swap');
+
+  :root {
+    --bg:      #050c10;
+    --surf:    #0a1520;
+    --surf2:   #0f1e2a;
+    --border:  #1a3545;
+    --accent:  #00e5ff;
+    --green:   #00ff9d;
+    --orange:  #ff9800;
+    --red:     #ff3d5a;
+    --yellow:  #ffeb3b;
+    --purple:  #b388ff;
+    --text:    #b0ccd8;
+    --bright:  #e0f0f8;
+    --dim:     #3a5a6a;
+    --mono:    'Share Tech Mono', monospace;
+    --sans:    'Rajdhani', sans-serif;
+    --body:    'Exo 2', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--body); min-height: 100vh; overflow-x: hidden; }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: linear-gradient(rgba(0,229,255,0.018) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,229,255,0.018) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none; z-index: 0;
+  }
+
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 28px 20px 60px; position: relative; z-index: 1; }
+
+  /* Header */
+  header { display: flex; align-items: center; gap: 16px; padding-bottom: 20px; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
+  .logo-box { width: 48px; height: 48px; border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+  .h-title { font-family: var(--sans); font-size: 24px; font-weight: 700; color: var(--bright); letter-spacing: 3px; text-transform: uppercase; }
+  .h-sub { font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: 1px; margin-top: 2px; }
+  .live-dot { margin-left: auto; display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 10px; color: var(--green); }
+  .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: blink 1.8s infinite; }
+  @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.25} }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    background: var(--surf);
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.25s, background 0.25s;
+    margin-bottom: 16px;
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(0,229,255,0.04); }
+  .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+  .upload-icon { font-size: 42px; margin-bottom: 14px; }
+  .upload-title { font-family: var(--sans); font-size: 18px; font-weight: 700; color: var(--bright); letter-spacing: 2px; margin-bottom: 8px; }
+  .upload-sub { font-family: var(--mono); font-size: 11px; color: var(--dim); line-height: 1.7; }
+
+  .sample-row { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 20px; }
+  .sample-text { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+  .btn-sample { font-family: var(--mono); font-size: 11px; padding: 7px 16px; background: transparent; border: 1px solid var(--accent); color: var(--accent); cursor: pointer; letter-spacing: 1px; transition: all 0.2s; }
+  .btn-sample:hover { background: var(--accent); color: var(--bg); }
+
+  .btn-analyze { width: 100%; padding: 15px; background: transparent; border: 2px solid var(--accent); color: var(--accent); font-family: var(--sans); font-size: 16px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; cursor: pointer; position: relative; overflow: hidden; transition: color 0.25s; margin-bottom: 28px; }
+  .btn-analyze::before { content: ''; position: absolute; inset: 0; background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform 0.25s; z-index: 0; }
+  .btn-analyze:hover::before { transform: scaleX(1); }
+  .btn-analyze:hover { color: var(--bg); }
+  .btn-analyze span { position: relative; z-index: 1; }
+  .btn-analyze:disabled { border-color: var(--dim); color: var(--dim); cursor: not-allowed; }
+  .btn-analyze:disabled::before { display: none; }
+
+  /* Loading */
+  .loading { display: none; align-items: center; gap: 12px; padding: 16px 20px; background: var(--surf); border: 1px solid var(--border); margin-bottom: 20px; font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: 1px; }
+  .spinner { width: 16px; height: 16px; border: 2px solid rgba(0,229,255,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Error */
+  .error-box { display: none; background: rgba(255,61,90,0.06); border: 1px solid rgba(255,61,90,0.3); padding: 14px 18px; font-family: var(--mono); font-size: 12px; color: var(--red); letter-spacing: 1px; margin-bottom: 20px; word-break: break-word; }
+
+  /* Section title */
+  .sec-title { font-family: var(--mono); font-size: 10px; letter-spacing: 2px; color: var(--accent); text-transform: uppercase; margin: 24px 0 12px; }
+
+  /* Risk banner */
+  .risk-card { background: var(--surf); border: 1px solid var(--border); padding: 20px 24px; margin-bottom: 20px; position: relative; overflow: hidden; }
+  .risk-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+  .rc-clean::before  { background: var(--green); }
+  .rc-low::before    { background: #8bc34a; }
+  .rc-medium::before { background: var(--yellow); }
+  .rc-high::before   { background: var(--orange); }
+  .rc-critical::before { background: var(--red); }
+
+  .risk-row { display: flex; align-items: center; gap: 20px; margin-bottom: 16px; }
+  .score-circle { width: 80px; height: 80px; border-radius: 50%; border: 3px solid; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; }
+  .score-num { font-family: var(--sans); font-size: 28px; font-weight: 700; line-height: 1; }
+  .score-lbl { font-family: var(--mono); font-size: 9px; letter-spacing: 1px; margin-top: 2px; }
+  .risk-info h2 { font-family: var(--sans); font-size: 20px; font-weight: 700; color: var(--bright); margin-bottom: 6px; }
+  .risk-info p { font-size: 13px; color: var(--text); line-height: 1.6; }
+  .track { height: 5px; background: var(--surf2); border-radius: 3px; overflow: hidden; }
+  .track-fill { height: 100%; transition: width 0.9s ease; }
+
+  /* Stats grid */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 4px; }
+  .stat-box { background: var(--surf); border: 1px solid var(--border); padding: 14px 16px; }
+  .stat-label { font-family: var(--mono); font-size: 9px; letter-spacing: 1.5px; color: var(--dim); margin-bottom: 6px; text-transform: uppercase; }
+  .stat-value { font-family: var(--sans); font-size: 22px; font-weight: 700; color: var(--bright); }
+  .stat-sub { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: 3px; }
+
+  /* Alerts */
+  .alert-card { background: var(--surf); border: 1px solid var(--border); border-left: 3px solid; padding: 14px 16px; margin-bottom: 8px; }
+  .alert-top { display: flex; gap: 12px; align-items: flex-start; }
+  .alert-icon { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; border-radius: 2px; }
+  .alert-name { font-family: var(--sans); font-size: 15px; font-weight: 700; color: var(--bright); margin-bottom: 4px; }
+  .alert-badge { font-family: var(--mono); font-size: 9px; padding: 2px 8px; border: 1px solid; letter-spacing: 1px; margin-left: 8px; vertical-align: middle; }
+  .alert-desc { font-size: 12px; color: var(--text); line-height: 1.65; }
+  .alert-evidence { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: 6px; padding: 5px 10px; background: var(--surf2); border-left: 2px solid var(--dim); }
+
+  /* Two column layout */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media(max-width:650px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* Tables */
+  .data-table { width: 100%; background: var(--surf); border: 1px solid var(--border); border-collapse: collapse; font-size: 12px; }
+  .data-table th { font-family: var(--mono); font-size: 9px; letter-spacing: 1.5px; color: var(--accent); padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); background: var(--surf2); text-transform: uppercase; }
+  .data-table td { padding: 7px 12px; border-bottom: 1px solid rgba(26,53,69,0.5); color: var(--text); font-family: var(--mono); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: rgba(0,229,255,0.03); }
+
+  /* Protocol bars */
+  .proto-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+  .proto-name { font-family: var(--mono); font-size: 11px; color: var(--text); width: 70px; flex-shrink: 0; }
+  .proto-track { flex: 1; height: 14px; background: var(--surf2); position: relative; }
+  .proto-fill { height: 100%; transition: width 0.6s ease; }
+  .proto-count { font-family: var(--mono); font-size: 10px; color: var(--dim); width: 50px; text-align: right; }
+
+  /* Color classes */
+  .c-clean    { color: var(--green);   border-color: var(--green); }
+  .c-low      { color: #8bc34a;        border-color: #8bc34a; }
+  .c-medium   { color: var(--yellow);  border-color: var(--yellow); }
+  .c-high     { color: var(--orange);  border-color: var(--orange); }
+  .c-critical { color: var(--red);     border-color: var(--red); }
+  .c-info     { color: var(--purple);  border-color: var(--purple); }
+  .bg-clean    { background: rgba(0,255,157,0.12); }
+  .bg-low      { background: rgba(139,195,74,0.12);}
+  .bg-medium   { background: rgba(255,235,59,0.12);}
+  .bg-high     { background: rgba(255,152,0,0.12); }
+  .bg-critical { background: rgba(255,61,90,0.15); }
+  .bg-info     { background: rgba(179,136,255,0.12);}
+
+  .port-tag { display: inline-block; font-family: var(--mono); font-size: 9px; padding: 1px 7px; border: 1px solid var(--dim); color: var(--dim); margin-left: 6px; }
+  .port-danger { border-color: var(--red); color: var(--red); }
+  .port-clear  { border-color: var(--orange); color: var(--orange); }
+  .port-sens   { border-color: var(--yellow); color: var(--yellow); }
+
+  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 10px; color: var(--dim); line-height: 1.8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo-box">🔍</div>
+    <div>
+      <div class="h-title">NetWatch</div>
+      <div class="h-sub">// NETWORK TRAFFIC ANALYSIS ENGINE // v1.0</div>
+    </div>
+    <div class="live-dot"><div class="pulse"></div>ACTIVE</div>
+  </header>
+
+  <!-- Upload -->
+  <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <input type="file" id="fileInput" accept=".pcap" onchange="fileSelected(this)">
+    <div class="upload-icon">📡</div>
+    <div class="upload-title">DROP PCAP FILE HERE</div>
+    <div class="upload-sub">
+      Drag & drop or click to upload a .pcap capture file<br>
+      Supports libpcap format — captured with Wireshark, tcpdump, or similar tools<br>
+      <span id="filename" style="color:var(--accent);margin-top:6px;display:block"></span>
+    </div>
+  </div>
+
+  <div class="sample-row">
+    <span class="sample-text">// Don't have a PCAP file?</span>
+    <button class="btn-sample" onclick="downloadSample()">⬇ DOWNLOAD SAMPLE PCAP</button>
+    <span class="sample-text">— includes port scans, ARP spoofing, cleartext creds & more</span>
+  </div>
+
+  <button class="btn-analyze" id="analyzeBtn" onclick="analyze()" disabled>
+    <span>⚡ ANALYZE TRAFFIC</span>
+  </button>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <span id="loadingText">Parsing packets...</span>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+  <div id="results"></div>
+
+  <footer>
+    // Built by Mofic Koudmani — Cybersecurity Portfolio Project<br>
+    // Broward College · B.A.S. Cybersecurity &amp; Ethical Hacking · 2026<br>
+    // Tools: Python, Flask, Packet Analysis, Network Security, Threat Detection
+  </footer>
+</div>
+
+<script>
+let selectedFile = null;
+
+// ── Drag & drop ───────────────────────────────────────────────────────────────
+const dz = document.getElementById("dropZone");
+dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("dragover"); });
+dz.addEventListener("dragleave", () => dz.classList.remove("dragover"));
+dz.addEventListener("drop", e => {
+  e.preventDefault();
+  dz.classList.remove("dragover");
+  const f = e.dataTransfer.files[0];
+  if (f) setFile(f);
+});
+
+function fileSelected(input) {
+  if (input.files[0]) setFile(input.files[0]);
+}
+
+function setFile(f) {
+  selectedFile = f;
+  document.getElementById("filename").textContent = `✓ ${f.name} (${fmtBytes(f.size)})`;
+  document.getElementById("analyzeBtn").disabled = false;
+}
+
+async function downloadSample() {
+  window.location.href = "/api/sample";
+}
+
+// ── Analyze ───────────────────────────────────────────────────────────────────
+async function analyze() {
+  if (!selectedFile) return;
+  clearResults();
+  showLoading("Parsing PCAP file...");
+
+  const fd = new FormData();
+  fd.append("file", selectedFile);
+
+  try {
+    const messages = [
+      "Parsing PCAP file...",
+      "Extracting packet headers...",
+      "Analyzing protocols...",
+      "Running threat detection...",
+      "Checking for port scans...",
+      "Analyzing DNS traffic...",
+      "Inspecting cleartext payloads...",
+      "Computing risk score...",
+    ];
+    let mi = 0;
+    const interval = setInterval(() => {
+      mi = (mi + 1) % messages.length;
+      document.getElementById("loadingText").textContent = messages[mi];
+    }, 800);
+
+    const res = await fetch("/api/analyze", { method: "POST", body: fd });
+    clearInterval(interval);
+    const data = await res.json();
+    hideLoading();
+    if (data.error) { showError(data.error); return; }
+    renderResults(data);
+  } catch (e) {
+    hideLoading();
+    showError("Server error. Make sure the app is running (python app.py).");
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderResults(d) {
+  const cc = riskClass(d.risk_level);
+  const hex = riskHex(d.risk_level);
+  const icon = riskIcon(d.risk_level);
+
+  const protoColors = ["#00e5ff","#00ff9d","#b388ff","#ff9800","#ffeb3b","#ff3d5a","#4fc3f7","#a5d6a7"];
+  const maxProto = Math.max(...Object.values(d.protocols));
+
+  const protoHTML = Object.entries(d.protocols).slice(0, 8).map(([name, count], i) => `
+    <div class="proto-bar">
+      <div class="proto-name">${name}</div>
+      <div class="proto-track">
+        <div class="proto-fill" style="width:${(count/maxProto*100).toFixed(1)}%;background:${protoColors[i % protoColors.length]}"></div>
+      </div>
+      <div class="proto-count">${count.toLocaleString()}</div>
+    </div>
+  `).join("");
+
+  const alertsHTML = d.alerts.length === 0
+    ? `<div style="padding:20px;text-align:center;font-family:var(--mono);font-size:12px;color:var(--green)">✓ No threats detected</div>`
+    : d.alerts.map(a => {
+        const ac = severityClass(a.severity);
+        const ai = sevIcon(a.severity);
+        return `
+          <div class="alert-card c-${ac}" style="border-left-color:${sevHex(a.severity)}">
+            <div class="alert-top">
+              <div class="alert-icon bg-${ac}">${ai}</div>
+              <div style="flex:1">
+                <div class="alert-name">
+                  ${a.category}
+                  <span class="alert-badge c-${ac}">${a.severity.toUpperCase()}</span>
+                </div>
+                <div class="alert-desc">${a.description}</div>
+                ${a.evidence ? `<div class="alert-evidence">// ${a.evidence}</div>` : ""}
+                ${a.source ? `<div style="font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:5px">SRC: ${a.source}${a.destination ? " → DST: " + a.destination : ""}</div>` : ""}
+              </div>
+            </div>
+          </div>`;
+      }).join("");
+
+  const topTalkersHTML = d.top_talkers.slice(0, 8).map(([ip, bytes]) => `
+    <tr><td>${ip}</td><td>${fmtBytes(bytes)}</td><td>${isPrivate(ip) ? '<span style="color:var(--green);font-size:10px">PRIVATE</span>' : '<span style="color:var(--orange);font-size:10px">EXTERNAL</span>'}</td></tr>
+  `).join("");
+
+  const portLabels = {
+    21:"FTP",22:"SSH",23:"Telnet",25:"SMTP",53:"DNS",80:"HTTP",110:"POP3",
+    135:"RPC",139:"NetBIOS",143:"IMAP",443:"HTTPS",445:"SMB",
+    1433:"MSSQL",3389:"RDP",4444:"Metasploit",5900:"VNC",6667:"IRC",
+    8080:"HTTP-Alt",27017:"MongoDB",3306:"MySQL"
+  };
+  const dangerPorts = [4444,1080,6667,31337,12345,9001,9050];
+  const clearPorts  = [21,23,25,80,110,119,143,389,514];
+  const sensPorts   = [3389,5900,1433,3306,5432,27017,6379];
+
+  const portsHTML = Object.entries(d.port_activity).slice(0, 12).map(([port, count]) => {
+    const p = parseInt(port);
+    let tag = "";
+    if (dangerPorts.includes(p)) tag = `<span class="port-tag port-danger">DANGEROUS</span>`;
+    else if (clearPorts.includes(p)) tag = `<span class="port-tag port-clear">CLEARTEXT</span>`;
+    else if (sensPorts.includes(p)) tag = `<span class="port-tag port-sens">SENSITIVE</span>`;
+    return `<tr><td>${port}${tag}</td><td>${portLabels[p] || "—"}</td><td>${count.toLocaleString()}</td></tr>`;
+  }).join("");
+
+  const connsHTML = d.connections.slice(0, 10).map(c => `
+    <tr>
+      <td>${c.src}</td>
+      <td>${c.dst}</td>
+      <td>${c.protocol}</td>
+      <td>${c.port}${c.port_name ? ` <span style="color:var(--dim)">(${c.port_name})</span>` : ""}</td>
+      <td>${c.packets.toLocaleString()}</td>
+    </tr>
+  `).join("");
+
+  document.getElementById("results").style.display = "block";
+  document.getElementById("results").innerHTML = `
+
+    <!-- Risk overview -->
+    <div class="risk-card rc-${cc.replace("c-","")}">
+      <div class="risk-row">
+        <div class="score-circle c-${cc.replace("c-","")}">
+          <div class="score-num" style="color:${hex}">${d.risk_score}</div>
+          <div class="score-lbl">/ 100</div>
+        </div>
+        <div class="risk-info">
+          <h2>${icon} ${d.risk_level} Risk</h2>
+          <p>${d.summary}</p>
+        </div>
+      </div>
+      <div class="track"><div class="track-fill" style="width:${d.risk_score}%;background:${hex}"></div></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="sec-title">// Capture Statistics</div>
+    <div class="stats-grid">
+      <div class="stat-box"><div class="stat-label">Total Packets</div><div class="stat-value">${d.total_packets.toLocaleString()}</div></div>
+      <div class="stat-box"><div class="stat-label">Total Data</div><div class="stat-value">${d.total_bytes_fmt}</div></div>
+      <div class="stat-box"><div class="stat-label">Duration</div><div class="stat-value">${d.duration_seconds}s</div></div>
+      <div class="stat-box"><div class="stat-label">Alerts</div><div class="stat-value" style="color:${d.alerts.length > 0 ? "var(--red)" : "var(--green)"}">${d.alerts.length}</div></div>
+      <div class="stat-box"><div class="stat-label">Protocols</div><div class="stat-value">${Object.keys(d.protocols).length}</div></div>
+      <div class="stat-box"><div class="stat-label">Unique Conns</div><div class="stat-value">${d.connections.length}</div></div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="sec-title">// Threat Alerts (${d.alerts.length})</div>
+    ${alertsHTML}
+
+    <!-- Protocol breakdown + Top talkers -->
+    <div class="two-col" style="margin-top:4px">
+      <div>
+        <div class="sec-title">// Protocol Breakdown</div>
+        <div style="background:var(--surf);border:1px solid var(--border);padding:16px">
+          ${protoHTML}
+        </div>
+      </div>
+      <div>
+        <div class="sec-title">// Top Talkers (by volume)</div>
+        <table class="data-table">
+          <thead><tr><th>IP Address</th><th>Volume</th><th>Type</th></tr></thead>
+          <tbody>${topTalkersHTML}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Port activity + Connections -->
+    <div class="two-col" style="margin-top:4px">
+      <div>
+        <div class="sec-title">// Top Destination Ports</div>
+        <table class="data-table">
+          <thead><tr><th>Port</th><th>Service</th><th>Packets</th></tr></thead>
+          <tbody>${portsHTML}</tbody>
+        </table>
+      </div>
+      <div>
+        <div class="sec-title">// Top Connections</div>
+        <table class="data-table">
+          <thead><tr><th>Source</th><th>Destination</th><th>Proto</th><th>Port</th><th>Pkts</th></tr></thead>
+          <tbody>${connsHTML}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ── Color helpers ─────────────────────────────────────────────────────────────
+function riskClass(l) { return {Clean:"clean",Low:"low",Medium:"medium",High:"high",Critical:"critical"}[l]||"medium"; }
+function riskHex(l)   { return {Clean:"#00ff9d",Low:"#8bc34a",Medium:"#ffeb3b",High:"#ff9800",Critical:"#ff3d5a"}[l]||"#ffeb3b"; }
+function riskIcon(l)  { return {Clean:"✓",Low:"◎",Medium:"⚠",High:"⛔",Critical:"☠"}[l]||"⚠"; }
+function severityClass(s) { return s === "info" ? "info" : {safe:"clean",low:"low",medium:"medium",high:"high",critical:"critical"}[s]||"medium"; }
+function sevHex(s)    { return {safe:"#00ff9d",low:"#8bc34a",medium:"#ffeb3b",high:"#ff9800",critical:"#ff3d5a",info:"#b388ff"}[s]||"#ffeb3b"; }
+function sevIcon(s)   { return {safe:"✓",low:"◎",medium:"⚠",high:"⛔",critical:"☠",info:"ℹ"}[s]||"•"; }
+function isPrivate(ip){ return /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.)/.test(ip); }
+function fmtBytes(b)  {
+  if (b >= 1073741824) return (b/1073741824).toFixed(1)+" GB";
+  if (b >= 1048576)    return (b/1048576).toFixed(1)+" MB";
+  if (b >= 1024)       return (b/1024).toFixed(1)+" KB";
+  return b+" B";
+}
+
+// ── UI ────────────────────────────────────────────────────────────────────────
+function showLoading(msg) { document.getElementById("loading").style.display = "flex"; document.getElementById("loadingText").textContent = msg; }
+function hideLoading()    { document.getElementById("loading").style.display = "none"; }
+function showError(msg)   { const e = document.getElementById("errorBox"); e.textContent = "// ERROR: " + msg; e.style.display = "block"; }
+function clearResults()   {
+  document.getElementById("results").style.display = "none";
+  document.getElementById("results").innerHTML = "";
+  document.getElementById("errorBox").style.display = "none";
+  hideLoading();
+}
+</script>
+</body>
+</html>
